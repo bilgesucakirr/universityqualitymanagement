@@ -2,14 +2,13 @@ package com.universityqualitymanagement.universityqualitymanagement.controller;
 
 import com.universityqualitymanagement.universityqualitymanagement.services.RoleService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import com.universityqualitymanagement.universityqualitymanagement.models.Role;
 
+import java.util.List;
+
 @RestController
-@RequestMapping("/role")
+@RequestMapping("/roles")
 public class RoleController {
 
     private final RoleService roleService;
@@ -21,7 +20,12 @@ public class RoleController {
 
     @PostMapping
     public String createRole(@RequestBody Role role) {
-       roleService.createRole(role);
+        roleService.createRole(role);
         return "Role created successfully";
+    }
+
+    @GetMapping
+    public List<Role> getAllRoles() {
+        return roleService.getAllRoles();
     }
 }

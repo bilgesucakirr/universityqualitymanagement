@@ -28,15 +28,17 @@ public class AuthService {
     }
 
     public UserResponse register(RegisterRequest request) {
-        Role defaultUserRole = roleRepository.findByName("USER")
-                .orElseThrow(() -> new RuntimeException("Default user role not found"));
+        Role defaultUserRole = roleRepository.findByName("STUDENT") // Assuming default registration is for STUDENT
+                .orElseThrow(() -> new RuntimeException("Default user role (STUDENT) not found."));
 
-        User user = new User(request.getEmail(), request.getPassword(), request.getName(), defaultUserRole);
+        // Use the new constructor with null for faculty and department
+        User user = new User(request.getEmail(), request.getPassword(), request.getName(), defaultUserRole, null, null);
         userRepository.save(user);
 
-        return new UserResponse(user.getId(), user.getName(), user.getEmail());
-
+        // Populate UserResponse with null for faculty/department as they are not set during registration
+        return new UserResponse(user.getId(), user.getName(), user.getEmail(), user.getRole().getName(), null, null, null, null);
     }
+
     public LoginResponse login(LoginRequest request) {
         User user = userRepository.findByEmail(request.getEmail())
                 .orElseThrow(() -> new RuntimeException("Invalid email or password"));
@@ -57,8 +59,12 @@ public class AuthService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
 
-        return new UserResponse(user.getId(), user.getName(), user.getEmail());
+        String facultyId = user.getFaculty() != null ? user.getFaculty().getId() : null;
+        String facultyName = user.getFaculty() != null ? user.getFaculty().getName() : null;
+        String departmentId = user.getDepartment() != null ? user.getDepartment().getId() : null;
+        String departmentName = user.getDepartment() != null ? user.getDepartment().getName() : null;
+
+        return new UserResponse(user.getId(), user.getName(), user.getEmail(), user.getRole().getName(), facultyId, facultyName, departmentId, departmentName);
     }
 
 }
-

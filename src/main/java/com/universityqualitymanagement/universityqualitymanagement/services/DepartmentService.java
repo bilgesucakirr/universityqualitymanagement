@@ -14,7 +14,7 @@ import java.util.stream.Collectors;
 public class DepartmentService {
 
     private final DepartmentRepository departmentRepository;
-    private final FacultyRepository facultyRepository; // Needed to find Faculty by ID
+    private final FacultyRepository facultyRepository;
 
     @Autowired
     public DepartmentService(DepartmentRepository departmentRepository, FacultyRepository facultyRepository) {
@@ -22,7 +22,6 @@ public class DepartmentService {
         this.facultyRepository = facultyRepository;
     }
 
-    // Create a new department
     public DepartmentDto createDepartment(DepartmentDto departmentDto) {
         Faculty faculty = facultyRepository.findById(departmentDto.getFacultyId())
                 .orElseThrow(() -> new IllegalArgumentException("Faculty not found with ID: " + departmentDto.getFacultyId()));
@@ -36,7 +35,6 @@ public class DepartmentService {
         return new DepartmentDto(savedDepartment.getId(), savedDepartment.getName(), savedDepartment.getFaculty().getId(), savedDepartment.getFaculty().getName());
     }
 
-    // Get all departments
     public List<DepartmentDto> getAllDepartments() {
         return departmentRepository.findAll().stream()
                 .map(department -> new DepartmentDto(
@@ -48,7 +46,20 @@ public class DepartmentService {
                 .collect(Collectors.toList());
     }
 
-    // Get department by ID
+    // New method: Get departments by faculty ID
+    public List<DepartmentDto> getDepartmentsByFacultyId(String facultyId) {
+        Faculty faculty = facultyRepository.findById(facultyId)
+                .orElseThrow(() -> new IllegalArgumentException("Faculty not found with ID: " + facultyId));
+        return departmentRepository.findByFaculty(faculty).stream()
+                .map(department -> new DepartmentDto(
+                        department.getId(),
+                        department.getName(),
+                        department.getFaculty() != null ? department.getFaculty().getId() : null,
+                        department.getFaculty() != null ? department.getFaculty().getName() : null
+                ))
+                .collect(Collectors.toList());
+    }
+
     public DepartmentDto getDepartmentById(String id) {
         return departmentRepository.findById(id)
                 .map(department -> new DepartmentDto(
@@ -60,18 +71,15 @@ public class DepartmentService {
                 .orElseThrow(() -> new IllegalArgumentException("Department not found with ID: " + id));
     }
 
-    // Update an existing department
     public DepartmentDto updateDepartment(String id, DepartmentDto departmentDto) {
         Department existingDepartment = departmentRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Department not found with ID: " + id));
 
-        Faculty newFaculty = null;
+        Faculty newFaculty = existingDepartment.getFaculty(); // Default to current faculty
         if (departmentDto.getFacultyId() != null && !departmentDto.getFacultyId().equals(existingDepartment.getFaculty().getId())) {
             newFaculty = facultyRepository.findById(departmentDto.getFacultyId())
                     .orElseThrow(() -> new IllegalArgumentException("New Faculty not found with ID: " + departmentDto.getFacultyId()));
             existingDepartment.setFaculty(newFaculty);
-        } else {
-            newFaculty = existingDepartment.getFaculty(); // Keep existing faculty if not changed
         }
 
         if (departmentDto.getName() != null && !departmentDto.getName().equals(existingDepartment.getName())) {
@@ -86,12 +94,10 @@ public class DepartmentService {
         return new DepartmentDto(updatedDepartment.getId(), updatedDepartment.getName(), updatedDepartment.getFaculty().getId(), updatedDepartment.getFaculty().getName());
     }
 
-    // Delete a department by ID
     public void deleteDepartment(String id) {
         if (!departmentRepository.existsById(id)) {
             throw new IllegalArgumentException("Department not found with ID: " + id);
         }
-        // Consider handling associated courses/users/submissions before deleting
         departmentRepository.deleteById(id);
     }
 }

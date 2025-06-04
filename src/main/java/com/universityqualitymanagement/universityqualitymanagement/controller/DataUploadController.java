@@ -20,12 +20,16 @@ public class DataUploadController {
 
     @PostMapping("/survey-results")
     public ResponseEntity<String> uploadSurveyResults(@RequestParam("file") MultipartFile file,
-                                                      @RequestParam("surveyId") String surveyId) {
+                                                      @RequestParam("surveyId") String surveyId,
+                                                      @RequestParam("facultyId") String facultyId,    // New parameter
+                                                      @RequestParam("departmentId") String departmentId, // New parameter
+                                                      @RequestParam("courseId") String courseId) {    // New parameter
+        // SECURITY NOTE: Unprotected endpoint. Staff role access required in a real app.
         if (file.isEmpty()) {
             return new ResponseEntity<>("Please select a file to upload.", HttpStatus.BAD_REQUEST);
         }
         try {
-            String message = excelUploadService.uploadSurveyResults(file, surveyId);
+            String message = excelUploadService.uploadSurveyResults(file, surveyId, facultyId, departmentId, courseId); // Pass new parameters
             return new ResponseEntity<>(message, HttpStatus.OK);
         } catch (IllegalArgumentException e) {
             return new ResponseEntity<>(e.getMessage(), HttpStatus.BAD_REQUEST);
@@ -34,5 +38,4 @@ public class DataUploadController {
             return new ResponseEntity<>("Failed to upload survey results: " + e.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
-
 }

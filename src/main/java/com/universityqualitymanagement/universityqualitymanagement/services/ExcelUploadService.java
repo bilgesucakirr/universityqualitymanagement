@@ -18,17 +18,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.slf4j.Logger; // Import Logger
+import org.slf4j.LoggerFactory; // Import LoggerFactory
 
 @Service
 public class ExcelUploadService {
 
+    private static final Logger logger = LoggerFactory.getLogger(ExcelUploadService.class); // Initialize logger
+
     private final SurveyRepository surveyRepository;
     private final SurveySubmissionRepository surveySubmissionRepository;
     private final QuestionAnswerRepository questionAnswerRepository;
-    private final FacultyRepository facultyRepository;
-    private final DepartmentRepository departmentRepository;
-    private final CourseRepository courseRepository;
-    private final InstructorRepository instructorRepository;
+    private final FacultyRepository facultyRepository; // Still needed for lookup
+    private final DepartmentRepository departmentRepository; // Still needed for lookup
+    private final CourseRepository courseRepository; // Still needed for lookup
+    private final InstructorRepository instructorRepository; // Still needed if instructors are linked to courses
 
     @Autowired
     public ExcelUploadService(SurveyRepository surveyRepository,
@@ -48,15 +52,30 @@ public class ExcelUploadService {
     }
 
     @Transactional
-    public String uploadSurveyResults(MultipartFile file, String surveyId) throws IOException {
-        // Find the survey by ID
+    public String uploadSurveyResults(MultipartFile file, String surveyId, String facultyId, String departmentId, String courseId) throws IOException {
         Survey survey = surveyRepository.findById(surveyId)
                 .orElseThrow(() -> new IllegalArgumentException("Survey not found with ID: " + surveyId));
 
-        Workbook workbook = new XSSFWorkbook(file.getInputStream());
-        Sheet sheet = workbook.getSheetAt(0); // Get the first sheet
+        // Find the pre-selected university entities
+        Faculty faculty = facultyRepository.findById(facultyId)
+                .orElseThrow(() -> new IllegalArgumentException("Selected Faculty not found with ID: " + facultyId));
+        Department department = departmentRepository.findById(departmentId)
+                .orElseThrow(() -> new IllegalArgumentException("Selected Department not found with ID: " + departmentId));
+        Course course = courseRepository.findById(courseId)
+                .orElseThrow(() -> new IllegalArgumentException("Selected Course not found with ID: " + courseId));
 
-        // Read the header row and find column indices
+        // Optional: Add validation that the selected course belongs to the selected department/faculty
+        if (!course.getDepartment().getId().equals(department.getId())) {
+            throw new IllegalArgumentException("Selected Course does not belong to the selected Department.");
+        }
+        if (!department.getFaculty().getId().equals(faculty.getId())) {
+            throw new IllegalArgumentException("Selected Department does not belong to the selected Faculty.");
+        }
+
+
+        Workbook workbook = new XSSFWorkbook(file.getInputStream());
+        Sheet sheet = workbook.getSheetAt(0);
+
         Row headerRow = sheet.getRow(0);
         if (headerRow == null) {
             throw new IllegalArgumentException("Excel file is empty or missing header row.");
@@ -64,27 +83,22 @@ public class ExcelUploadService {
 
         Map<String, Integer> colIndexMap = new HashMap<>();
         for (Cell cell : headerRow) {
-            // Trim column names to remove any whitespace that might exist from Excel export
             colIndexMap.put(cell.getStringCellValue().trim(), cell.getColumnIndex());
         }
 
-        // Check for existence of required columns
-        // Adjusted "Cevap :de gönderildi" column name for trimming
-        List<String> requiredCols = List.of("Cevap\t:de gönderildi", "Kurum", "Bölüm", "Ders", "Kimlik");
+        List<String> requiredCols = List.of("Cevap\t:de gönderildi", "Kimlik"); // "Kurum", "Bölüm", "Ders" are now provided as IDs
         for (String col : requiredCols) {
             if (!colIndexMap.containsKey(col)) {
                 throw new IllegalArgumentException("Missing required column in Excel: " + col);
             }
         }
 
-        // Find the indices of each Likert question column (Q01 to Q30)
         // Map Excel column index to the corresponding Question object from the Survey
         Map<Integer, Question> questionMap = new HashMap<>();
         for (int i = 1; i <= 30; i++) { // Assuming Q01 to Q30 are Likert questions
             String baseQuestionHeader = String.format("Q%02d", i);
             String fullQuestionHeader = null;
 
-            // Try different possible header formats from the Excel example
             String[] potentialHeaders = {
                     baseQuestionHeader + "->1-Strongly disagree.... 5-Strongly agree",
                     baseQuestionHeader + "->1. Çok Az / Very Low ... 5. Çok Yüksek / Very High",
@@ -101,122 +115,64 @@ public class ExcelUploadService {
 
             if (fullQuestionHeader != null) {
                 Integer colIdx = colIndexMap.get(fullQuestionHeader);
+                // Important: Link question to actual question from survey entity, not by rigid index 'i-1'.
+                // This assumes questions in Survey are sorted by their default excel parsing order (Q01, Q02...).
+                // A more robust method would be to parse the full question text from Excel header and match it to survey.questions.
+                // Or if Question entity had a specific 'excelColumnIdentifier' field.
                 if (colIdx != null && (i - 1) < survey.getQuestions().size()) {
-                    // Q01 maps to survey.getQuestions().get(0), Q02 to get(1), etc.
                     questionMap.put(colIdx, survey.getQuestions().get(i - 1));
                 }
             } else {
-                // If Likert question column not found, check if it's beyond Q30 (Q31, Q32 etc.)
-                // These are non-Likert according to the sample, so we can skip.
-                if (i <= 30) { // If it's one of the expected Likert questions and not found, throw error
-                    throw new IllegalArgumentException("Missing Likert question column in Excel: " + baseQuestionHeader);
+                // If a Likert question column isn't found for Q01-Q30, it indicates a problem with the Excel format.
+                if (i <= 30) {
+                    logger.warn("Likert question column {} not found in Excel. Skipping scores for this question.", baseQuestionHeader);
+                    // If you want to throw an error for missing expected columns:
+                    // throw new IllegalArgumentException("Missing Likert question column in Excel: " + baseQuestionHeader);
                 }
             }
         }
 
         DataFormatter formatter = new DataFormatter();
 
-        for (int i = 1; i <= sheet.getLastRowNum(); i++) { // Skip header row
+        for (int i = 1; i <= sheet.getLastRowNum(); i++) {
             final Row dataRow = sheet.getRow(i);
-            if (dataRow == null) continue; // Skip empty rows
+            if (dataRow == null) continue;
 
-            // Extract the submission code from "Kimlik" column
             final String submissionCode = formatter.formatCellValue(dataRow.getCell(colIndexMap.get("Kimlik")));
-            // Check if this submission already exists to prevent duplicates
             if (surveySubmissionRepository.existsBySubmissionCode(submissionCode)) {
-                System.out.println("Submission with code " + submissionCode + " already exists. Skipping.");
+                logger.info("Submission with code {} already exists. Skipping this row.", submissionCode);
                 continue;
             }
 
-            // Extract student number (using "Kimlik" column for student number as per example)
-            String tempStudentNumber = formatter.formatCellValue(dataRow.getCell(colIndexMap.get("Kimlik"))); // Assuming "Kimlik" is student identifier
-            if (tempStudentNumber.isEmpty() || tempStudentNumber.isBlank()) {
-                // If student number is empty, anonymize it using submissionCode
-                tempStudentNumber = "Anonim_" + submissionCode;
+            String studentNumber = formatter.formatCellValue(dataRow.getCell(colIndexMap.get("Kimlik")));
+            if (studentNumber.isEmpty() || studentNumber.isBlank()) {
+                studentNumber = "Anonim_" + submissionCode; // Anonymize if empty
             }
-            final String studentNumber = tempStudentNumber; // Effective final for closure
 
-            // Parse submission date (this part is crucial and error-prone due to irregular format)
-            LocalDateTime submissionDate = null; // Removed final, initialized to null
+            LocalDateTime submissionDate = null;
             final String submissionDateStr = formatter.formatCellValue(dataRow.getCell(colIndexMap.get("Cevap\t:de gönderildi")));
             try {
-                // Regex to extract month/day, year, and time parts
-                // Example: "9/am/2024 09:01:18"
-                // Group 1: month (e.g., "9")
-                // Group 2: empty or "am" (ignored)
-                // Group 3: year (e.g., "2024")
-                // Group 4-6: hour, minute, second
+                // Regex: M/day/yyyy HH:mm:ss -> (M)/anything/(yyyy) (HH):(mm):(ss)
                 Pattern pattern = Pattern.compile("(\\d+)/\\w*(\\d*)/(\\d{4}) (\\d{2}):(\\d{2}):(\\d{2})");
                 Matcher matcher = pattern.matcher(submissionDateStr);
 
                 if (matcher.find()) {
-                    String monthOrDayPart = matcher.group(1); // "9"
-                    // If your Excel date includes a day (e.g., "9/15/2024"), matcher.group(2) would be "15"
-                    // As per the example, "9/am/2024", so we assume day is not explicitly given in the first two parts,
-                    // and we will default to '01' for the day to create a valid date.
-                    String yearPart = matcher.group(3); // "2024"
+                    String monthPart = matcher.group(1);
+                    String yearPart = matcher.group(3);
                     String timePart = String.format("%s:%s:%s", matcher.group(4), matcher.group(5), matcher.group(6));
+                    String datePartCleaned = String.format("%s/01/%s", monthPart, yearPart); // Default to 01 for day
 
-                    // Force "month/day/year" format: e.g., "9/am/2024" -> "09/01/2024"
-                    // If the Excel format varies (e.g., "M/d/yyyy"), this part might need adjustment.
-                    String datePartCleaned = String.format("%s/01/%s", monthOrDayPart, yearPart);
-
-                    // Parse the date and time string
                     submissionDate = LocalDateTime.parse(datePartCleaned + " " + timePart, DateTimeFormatter.ofPattern("M/dd/yyyy HH:mm:ss"));
                 } else {
-                    System.err.println("Failed to match date pattern for: " + submissionDateStr + ". Defaulting to current time.");
-                    submissionDate = LocalDateTime.now(); // Default to current time if parsing fails
+                    logger.warn("Failed to match date pattern for: '{}'. Defaulting to current time.", submissionDateStr);
+                    submissionDate = LocalDateTime.now();
                 }
             } catch (Exception e) {
-                System.err.println("Error parsing date '" + submissionDateStr + "': " + e.getMessage() + ". Defaulting to current time.");
-                submissionDate = LocalDateTime.now(); // Default to current time on any parsing error
+                logger.error("Error parsing date '{}': {}. Defaulting to current time.", submissionDateStr, e.getMessage());
+                submissionDate = LocalDateTime.now();
             }
 
-            final String institutionName = formatter.formatCellValue(dataRow.getCell(colIndexMap.get("Kurum")));
-            final String departmentName = formatter.formatCellValue(dataRow.getCell(colIndexMap.get("Bölüm")));
-            final String courseExcelString = formatter.formatCellValue(dataRow.getCell(colIndexMap.get("Ders")));
-
-            // Parse Course Excel string: e.g., "INDE2001.1 Operations Research I (4) (FALL23)"
-            String tempCourseCode = "";
-            String tempCourseName = "";
-            Integer tempCredits = null;
-            String tempSemester = "";
-
-            // Regex: CourseCode (e.g., INDE2001.1), CourseName (e.g., Operations Research I), Credits (e.g., 4), Semester (e.g., FALL23)
-            Pattern coursePattern = Pattern.compile("([A-Z]{4}\\d{4}\\.\\d+)\\s+(.*)\\s+\\((\\d+)\\)\\s+\\(([^)]+)\\)");
-            Matcher courseMatcher = coursePattern.matcher(courseExcelString);
-            if (courseMatcher.find()) {
-                tempCourseCode = courseMatcher.group(1);
-                tempCourseName = courseMatcher.group(2).trim();
-                tempCredits = Integer.parseInt(courseMatcher.group(3));
-                tempSemester = courseMatcher.group(4);
-            } else {
-                System.err.println("Could not parse course string: " + courseExcelString + ". Skipping this row.");
-                continue; // Skip row if course parsing fails
-            }
-
-            // Make effectively final copies for Course object creation
-            final String courseCode = tempCourseCode;
-            final String courseName = tempCourseName;
-            final Integer credits = tempCredits;
-            final String semester = tempSemester;
-
-            // Find or create Faculty
-            final Faculty faculty = facultyRepository.findByName(institutionName)
-                    .orElseGet(() -> facultyRepository.save(new Faculty(institutionName)));
-
-            // Find or create Department (associated with Faculty)
-            final Department department = departmentRepository.findByNameAndFaculty(departmentName, faculty)
-                    .orElseGet(() -> departmentRepository.save(new Department(departmentName, faculty)));
-
-            // Instructor information is not directly in the Excel example, so leave as null
-            final Instructor instructor = null;
-
-            // Find or create Course (associated with Department and Instructor)
-            final Course course = courseRepository.findByCourseCodeAndSemesterAndDepartment(courseCode, semester, department)
-                    .orElseGet(() -> courseRepository.save(new Course(courseCode, courseName, credits, semester, department, instructor)));
-
-            // Create and save SurveySubmission
+            // Create and save SurveySubmission using the pre-selected entities
             final SurveySubmission submission = new SurveySubmission(studentNumber, submissionCode, submissionDate, survey, course, faculty, department);
             surveySubmissionRepository.save(submission);
 
@@ -229,10 +185,15 @@ public class ExcelUploadService {
                 final Cell scoreCell = dataRow.getCell(colIdx);
                 if (scoreCell != null) {
                     try {
-                        final Integer score = (int) scoreCell.getNumericCellValue(); // Likert score should be numeric
-                        answers.add(new QuestionAnswer(submission, question, score));
+                        final Integer score = (int) scoreCell.getNumericCellValue();
+                        // Basic validation for Likert scale scores (1-5)
+                        if (score >= 1 && score <= 5) {
+                            answers.add(new QuestionAnswer(submission, question, score));
+                        } else {
+                            logger.warn("Invalid Likert score ({}) for question '{}' in row {}. Skipping this answer.", score, question.getQuestionText(), i);
+                        }
                     } catch (IllegalStateException | NumberFormatException e) {
-                        System.err.println("Invalid score format for question at column " + colIdx + " in row " + i + ": " + formatter.formatCellValue(scoreCell) + ". Skipping this answer.");
+                        logger.warn("Invalid score format for question at column {} in row {}: '{}'. Skipping this answer.", colIdx, i, formatter.formatCellValue(scoreCell));
                     }
                 }
             }

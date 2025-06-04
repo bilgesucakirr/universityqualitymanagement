@@ -5,39 +5,21 @@ import java.util.List;
 public class CreateSurveyRequest {
     private String title;
     private String description;
-    private List<String> questionTexts; // Sadece soru metinleri alacağız
+    private List<CreateQuestionRequest> questions; // Changed from List<String> to List<CreateQuestionDto>
 
-    public CreateSurveyRequest() {
-    }
+    public CreateSurveyRequest() {}
 
-    public CreateSurveyRequest(String title, String description, List<String> questionTexts) {
+    public CreateSurveyRequest(String title, String description, List<CreateQuestionRequest> questions) {
         this.title = title;
         this.description = description;
-        this.questionTexts = questionTexts;
+        this.questions = questions;
     }
 
     // Getters and Setters
-    public String getTitle() {
-        return title;
-    }
-
-    public void setTitle(String title) {
-        this.title = title;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
-
-    public List<String> getQuestionTexts() {
-        return questionTexts;
-    }
-
-    public void setQuestionTexts(List<String> questionTexts) {
-        this.questionTexts = questionTexts;
-    }
+    public String getTitle() { return title; }
+    public void setTitle(String title) { this.title = title; }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+    public List<CreateQuestionRequest> getQuestions() { return questions; }
+    public void setQuestions(List<CreateQuestionRequest> questions) { this.questions = questions; }
 }

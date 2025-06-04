@@ -20,40 +20,38 @@ public class FacultyController {
         this.facultyService = facultyService;
     }
 
-    // Create a new faculty
     @PostMapping
     public ResponseEntity<FacultyDto> createFaculty(@RequestBody FacultyDto facultyDto) {
+        // SECURITY NOTE: Unprotected endpoint. Admin access required in a real app.
         FacultyDto createdFaculty = facultyService.createFaculty(facultyDto);
         return new ResponseEntity<>(createdFaculty, HttpStatus.CREATED);
     }
 
-    // Get all faculties
     @GetMapping
     public ResponseEntity<List<FacultyDto>> getAllFaculties() {
+        // SECURITY NOTE: Unprotected endpoint.
         List<FacultyDto> faculties = facultyService.getAllFaculties();
         return ResponseEntity.ok(faculties);
     }
 
-    // Get faculty by ID
     @GetMapping("/{id}")
     public ResponseEntity<FacultyDto> getFacultyById(@PathVariable String id) {
+        // SECURITY NOTE: Unprotected endpoint.
         FacultyDto faculty = facultyService.getFacultyById(id);
         return ResponseEntity.ok(faculty);
     }
 
-    // Update an existing faculty
     @PutMapping("/{id}")
     public ResponseEntity<FacultyDto> updateFaculty(@PathVariable String id, @RequestBody FacultyDto facultyDto) {
+        // SECURITY NOTE: Unprotected endpoint.
         FacultyDto updatedFaculty = facultyService.updateFaculty(id, facultyDto);
         return ResponseEntity.ok(updatedFaculty);
     }
 
-    // Delete a faculty by ID
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteFaculty(@PathVariable String id) {
+        // SECURITY NOTE: Unprotected endpoint.
         facultyService.deleteFaculty(id);
         return ResponseEntity.noContent().build();
     }
-
-    // --- IMPORTANT: Add authorization (e.g., @PreAuthorize("hasRole('ADMIN')")) later for security. ---
 }

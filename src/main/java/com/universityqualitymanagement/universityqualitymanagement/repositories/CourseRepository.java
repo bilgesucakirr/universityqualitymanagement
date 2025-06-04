@@ -5,9 +5,11 @@ import com.universityqualitymanagement.universityqualitymanagement.models.Depart
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List; // New import
 import java.util.Optional;
 
 @Repository
 public interface CourseRepository extends JpaRepository<Course, String> {
     Optional<Course> findByCourseCodeAndSemesterAndDepartment(String courseCode, String semester, Department department);
+    List<Course> findByDepartment(Department department);
 }

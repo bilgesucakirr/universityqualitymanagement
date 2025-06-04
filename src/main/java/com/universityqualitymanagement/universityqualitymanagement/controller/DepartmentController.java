@@ -20,40 +20,43 @@ public class DepartmentController {
         this.departmentService = departmentService;
     }
 
-    // Create a new department
     @PostMapping
     public ResponseEntity<DepartmentDto> createDepartment(@RequestBody DepartmentDto departmentDto) {
+        // SECURITY NOTE: Unprotected endpoint. Admin access required in a real app.
         DepartmentDto createdDepartment = departmentService.createDepartment(departmentDto);
         return new ResponseEntity<>(createdDepartment, HttpStatus.CREATED);
     }
 
-    // Get all departments
     @GetMapping
-    public ResponseEntity<List<DepartmentDto>> getAllDepartments() {
-        List<DepartmentDto> departments = departmentService.getAllDepartments();
+    public ResponseEntity<List<DepartmentDto>> getAllDepartments(@RequestParam(required = false) String facultyId) {
+        // SECURITY NOTE: Unprotected endpoint.
+        List<DepartmentDto> departments;
+        if (facultyId != null && !facultyId.isEmpty()) {
+            departments = departmentService.getDepartmentsByFacultyId(facultyId);
+        } else {
+            departments = departmentService.getAllDepartments();
+        }
         return ResponseEntity.ok(departments);
     }
 
-    // Get department by ID
     @GetMapping("/{id}")
     public ResponseEntity<DepartmentDto> getDepartmentById(@PathVariable String id) {
+        // SECURITY NOTE: Unprotected endpoint.
         DepartmentDto department = departmentService.getDepartmentById(id);
         return ResponseEntity.ok(department);
     }
 
-    // Update an existing department
     @PutMapping("/{id}")
     public ResponseEntity<DepartmentDto> updateDepartment(@PathVariable String id, @RequestBody DepartmentDto departmentDto) {
+        // SECURITY NOTE: Unprotected endpoint.
         DepartmentDto updatedDepartment = departmentService.updateDepartment(id, departmentDto);
         return ResponseEntity.ok(updatedDepartment);
     }
 
-    // Delete a department by ID
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteDepartment(@PathVariable String id) {
+        // SECURITY NOTE: Unprotected endpoint.
         departmentService.deleteDepartment(id);
         return ResponseEntity.noContent().build();
     }
-
-    // --- IMPORTANT: Add authorization (e.g., @PreAuthorize("hasRole('ADMIN')")) later for security. ---
 }

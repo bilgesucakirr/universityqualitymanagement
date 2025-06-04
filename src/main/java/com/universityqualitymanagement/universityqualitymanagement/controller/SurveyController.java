@@ -1,7 +1,8 @@
+// src/main/java/com/universityqualitymanagement/universityqualitymanagement/controller/SurveyController.java
 package com.universityqualitymanagement.universityqualitymanagement.controller;
 
 import com.universityqualitymanagement.universityqualitymanagement.dtos.survey.CreateSurveyRequest;
-import com.universityqualitymanagement.universityqualitymanagement.dtos.survey.SurveyResponse;
+import com.universityqualitymanagement.universityqualitymanagement.dtos.survey.Survey; // Corrected: Using the DTO named 'Survey'
 import com.universityqualitymanagement.universityqualitymanagement.dtos.survey.UpdateSurveyRequest;
 import com.universityqualitymanagement.universityqualitymanagement.services.SurveyService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,35 +24,37 @@ public class SurveyController {
     }
 
     @PostMapping
-    public ResponseEntity<SurveyResponse> createSurvey(@RequestBody CreateSurveyRequest request) {
-        SurveyResponse response = surveyService.createSurvey(request);
+    public ResponseEntity<Survey> createSurvey(@RequestBody CreateSurveyRequest request) { // Corrected return type
+        // SECURITY NOTE: Unprotected endpoint. Admin/Staff access required in a real app.
+        Survey response = surveyService.createSurvey(request);
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
     @GetMapping
-    public ResponseEntity<List<SurveyResponse>> getAllSurveys() {
-        List<SurveyResponse> surveys = surveyService.getAllSurveys();
+    public ResponseEntity<List<Survey>> getAllSurveys() { // Corrected return type
+        // SECURITY NOTE: Unprotected endpoint.
+        List<Survey> surveys = surveyService.getAllSurveys();
         return ResponseEntity.ok(surveys);
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<SurveyResponse> getSurveyById(@PathVariable String id) {
-        SurveyResponse survey = surveyService.getSurveyById(id);
+    public ResponseEntity<Survey> getSurveyById(@PathVariable String id) { // Corrected return type
+        // SECURITY NOTE: Unprotected endpoint.
+        Survey survey = surveyService.getSurveyById(id);
         return ResponseEntity.ok(survey);
     }
 
     @PutMapping("/{id}")
-    public ResponseEntity<SurveyResponse> updateSurvey(@PathVariable String id, @RequestBody UpdateSurveyRequest request) {
-        SurveyResponse updatedSurvey = surveyService.updateSurvey(id, request);
+    public ResponseEntity<Survey> updateSurvey(@PathVariable String id, @RequestBody UpdateSurveyRequest request) { // Corrected return type
+        // SECURITY NOTE: Unprotected endpoint. Admin/Staff access required in a real app.
+        Survey updatedSurvey = surveyService.updateSurvey(id, request);
         return ResponseEntity.ok(updatedSurvey);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteSurvey(@PathVariable String id) {
+        // SECURITY NOTE: Unprotected endpoint. Admin/Staff access required in a real app.
         surveyService.deleteSurvey(id);
         return ResponseEntity.noContent().build();
     }
-
-    // --- Önemli Not: Güvenlik için (@PreAuthorize gibi) buraya daha sonra yetkilendirme eklenmelidir. ---
-    // @ExceptionHandler ile daha iyi hata yönetimi de yapılabilir.
 }
